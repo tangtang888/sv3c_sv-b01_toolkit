@@ -3,7 +3,6 @@ package main
 import (
 	"time"
 	"net/http"
-	"log"
 	"context"
 	"strings"
 	"errors"
@@ -29,13 +28,13 @@ func startServer(port uint) {
 	}
 
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("HTTP server error: %v", err)
+		log_Fatalf("HTTP server error: %+v", err)
 	}
 }
 
 func stopServer() {
 	if err := server.Shutdown(context.Background()); err != nil {
-		log.Fatal(err)
+		log_Fatalf("HTTP shutdown error: %+v", err)
 	}
 }
 
@@ -46,7 +45,7 @@ func handleEvent(w http.ResponseWriter, r *http.Request) {
 	ip := strings.Split(r.RemoteAddr, ":")[0]
 	camera := findCamera(ip)
 	if camera == nil {
-		log.Printf("[INFO] Received event from %v but it's not a registered camera.")
+		log_Infof("Received event from %v but it's not a registered camera.", ip)
 		return
 	}
 
@@ -61,7 +60,7 @@ func handleEvent(w http.ResponseWriter, r *http.Request) {
 	} else if bytes.Contains(buf.Bytes(), CAMERA_MOTION_END) {
 		camera.PostEvent(false)
 	} else {
-		log.Print("[DEBUG] Unknown event message.")
+		log_Debugf("[%s] Unknown event message.", ip)
 	}
 }
 
@@ -73,7 +72,7 @@ func sendSubscription(cameraIP string, expiration time.Time) error {
 	}
 
 	if res.StatusCode != 200 {
-		log.Print("[WARN] Could not open subscription")
+		log_Errorf("[%s] Could not open subscription", cameraIP)
 		// TODO: Retry?
 		return SubscribeError
 	}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"time"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -10,8 +9,10 @@ import (
 
 const SUBSCRIPTION_DURATION = time.Minute * 10
 const SUBSCRIPTION_RENEWAL = SUBSCRIPTION_DURATION - (time.Second * 30)
+const RECORDING_TIME_FORMAT = "2006-01-02_15.04.05"
 
 type Camera struct {
+	Name string
 	IP string
 	Subscribed bool
 	SubscriptionExpiration time.Time
@@ -30,23 +31,25 @@ type Camera struct {
 // tick for stop recording
 
 
-func NewCamera(ip string, minDuration time.Duration) *Camera {
+func NewCamera(ip string, name string, minDuration time.Duration) *Camera {
 	return &Camera{
 		IP: ip,
+		Name: name,
 		PostMotionRecordDuration: minDuration,
 	}
 }
 
 func (c *Camera) Subscribe() {
 	if c.Subscribed {
-		log.Fatalf("[ERR] Already subscribed to %s\n", c.IP)
+		log_Errorf("[%s] Already subscribed", c.IP)
+		return
 	}
-	log.Printf("[DEBUG] Subscribing to %s...\n", c.IP)
+	log_Debugf("[%s] Subscribing...", c.IP)
 
 	expiration := time.Now().Add(SUBSCRIPTION_DURATION)
 	err := sendSubscription(c.IP, expiration)
 	if err != nil {
-		log.Fatal(err) // TODO: Retry?
+		log_Fatalf("[%s] %+v", c.IP, err) // TODO: Retry?
 	}
 
 	c.SubscriptionExpiration = expiration
@@ -63,9 +66,10 @@ func (c *Camera) handleSubscriptionRenewal() {
 	for {
 		<- c.SubscriptionTimer.C
 		expiration := time.Now().Add(SUBSCRIPTION_DURATION)
+		log_Debugf("[%s] Renewing subscription", c.IP)
 		err := renewSubscription(c.IP, expiration)
 		if err != nil {
-			log.Fatal(err) // TODO: not fatal
+			log_Fatalf("[%s] %+v", c.IP, err) // TODO: not fatal
 		}
 		c.SubscriptionTimer.Reset(SUBSCRIPTION_RENEWAL)
 	}
@@ -73,16 +77,17 @@ func (c *Camera) handleSubscriptionRenewal() {
 
 func (c *Camera) Unsubscribe() {
 	if !c.Subscribed {
-		log.Fatal("[ERR] Camera not yet subscribed.\n")
+		log_Errorf("[%s] Camera not yet subscribed.", c.IP)
+		return
 	}
-	log.Printf("[DEBUG] Unsubscribing from %s...\n", c.IP)
+	log_Debugf("[%s] Unsubscribing", c.IP)
 
 	if !c.SubscriptionTimer.Stop() {
 		<- c.SubscriptionTimer.C
 	}
 	err := unsubscribe(c.IP)
 	if err != nil {
-		log.Fatal(err) // TODO: not fatal
+		log_Fatalf("[%s] %+v", c.IP, err) // TODO: not fatal
 	}
 
 	c.Subscribed = false
@@ -105,7 +110,7 @@ func (c *Camera) handleRecordingStop() {
 }
 
 func (c *Camera) StopRecording() {
-	log.Print("[DEBUG] Stopping recording.")
+	log_Debugf("[%s] Stopping recording", c.IP)
 	c.ffmpegCmd.Process.Signal(os.Interrupt)
 	c.ffmpegCmd = nil
 }
@@ -113,32 +118,31 @@ func (c *Camera) StopRecording() {
 func (c *Camera) PostEvent(motion bool) {
 	if motion {
 		c.LastMotionEvent = time.Now()
-		log.Print("[DEBUG] Disabling timer.")
+		log_Debugf("[%s] Disabling timer", c.IP)
 		c.RecordingStopTimer.Stop()
 
 		if c.ffmpegCmd != nil {
-			log.Print("[DEBUG] Recording already in progress...")
+			log_Debugf("[%s] Recording already in progress", c.IP)
 			return
 		}
 		
-		log.Print("[DEBUG] Starting recording.")
-		c.ffmpegCmd = recordCmd("rtsp://" + c.IP + ":554/stream0")
+		output := path.Join(outputPath, c.Name + "_" + time.Now().Format(RECORDING_TIME_FORMAT) + ".mp4")
+		log_Debugf("[%s] Starting recording at %s", c.IP, output)
+		c.ffmpegCmd = recordCmd("rtsp://" + c.IP + ":554/stream0", output)
 		c.ffmpegCmd.Dir = outputPath
 		if err := c.ffmpegCmd.Start(); err != nil {
-			log.Fatal(err)
+			log_Fatalf("[%s] %+v", c.IP, err)
 		}
 	} else {
 		if c.ffmpegCmd == nil {
 			return
 		}
-		log.Print("[DEBUG] Motion finished. Starting timer.")
+		log_Debugf("[%s] Motion finished. Starting timer.", c.IP)
 		c.RecordingStopTimer.Stop()
 		c.RecordingStopTimer.Reset(c.PostMotionRecordDuration)
 	}
 }
 
-const RECORDING_TIME_FORMAT = "2006-01-02T15:04:05"
-
-func recordCmd(streamURL string) *exec.Cmd {
-	return exec.Command(ffmpegPath, "-i", streamURL, "-vcodec", "copy", path.Join(outputPath, time.Now().Format(RECORDING_TIME_FORMAT) + ".mp4"))
+func recordCmd(streamURL string, filename string) *exec.Cmd {
+	return exec.Command(ffmpegPath, "-i", streamURL, "-vcodec", "copy", filename)
 }
