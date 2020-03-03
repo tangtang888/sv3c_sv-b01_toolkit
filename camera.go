@@ -7,8 +7,8 @@ import (
 	"path"
 )
 
-const SUBSCRIPTION_DURATION = time.Minute * 10
-const SUBSCRIPTION_RENEWAL = SUBSCRIPTION_DURATION - (time.Second * 30)
+const SUBSCRIPTION_DURATION = time.Minute * 5
+const SUBSCRIPTION_RENEWAL = SUBSCRIPTION_DURATION - (time.Second * 5)
 const RECORDING_TIME_FORMAT = "2006-01-02_15.04.05"
 
 type Camera struct {
@@ -23,14 +23,6 @@ type Camera struct {
 	ffmpegCmd *exec.Cmd
 }
 
-// subscribe
-// tick for renew subscription
-// unsubscribe on shutdown
-
-// listen for events and start recording, update last motion event
-// tick for stop recording
-
-
 func NewCamera(ip string, name string, minDuration time.Duration) *Camera {
 	return &Camera{
 		IP: ip,
@@ -40,16 +32,12 @@ func NewCamera(ip string, name string, minDuration time.Duration) *Camera {
 }
 
 func (c *Camera) Subscribe() {
-	if c.Subscribed {
-		log_Errorf("[%s] Already subscribed", c.IP)
-		return
-	}
 	log_Debugf("[%s] Subscribing...", c.IP)
 
 	expiration := time.Now().Add(SUBSCRIPTION_DURATION)
 	err := sendSubscription(c.IP, expiration)
 	if err != nil {
-		log_Fatalf("[%s] %+v", c.IP, err) // TODO: Retry?
+		log_Errorf("[%s] %+v", c.IP, err)
 	}
 
 	c.SubscriptionExpiration = expiration
@@ -67,19 +55,15 @@ func (c *Camera) handleSubscriptionRenewal() {
 		<- c.SubscriptionTimer.C
 		expiration := time.Now().Add(SUBSCRIPTION_DURATION)
 		log_Debugf("[%s] Renewing subscription", c.IP)
-		err := renewSubscription(c.IP, expiration)
+		err := sendSubscription(c.IP, expiration)
 		if err != nil {
-			log_Fatalf("[%s] %+v", c.IP, err) // TODO: not fatal
+			log_Errorf("[%s] %+v", c.IP, err)
 		}
 		c.SubscriptionTimer.Reset(SUBSCRIPTION_RENEWAL)
 	}
 }
 
 func (c *Camera) Unsubscribe() {
-	if !c.Subscribed {
-		log_Errorf("[%s] Camera not yet subscribed.", c.IP)
-		return
-	}
 	log_Debugf("[%s] Unsubscribing", c.IP)
 
 	if !c.SubscriptionTimer.Stop() {
@@ -87,7 +71,7 @@ func (c *Camera) Unsubscribe() {
 	}
 	err := unsubscribe(c.IP)
 	if err != nil {
-		log_Fatalf("[%s] %+v", c.IP, err) // TODO: not fatal
+		log_Errorf("[%s] %+v", c.IP, err)
 	}
 
 	c.Subscribed = false

@@ -14,7 +14,6 @@ var server *http.Server
 var mux *http.ServeMux
 
 var SubscribeError = errors.New("Could not subscribe to events.")
-var RenewError = errors.New("Could not renew subscription.")
 var UnsubscribeError = errors.New("Could not unsubscribe.")
 
 func startServer(port uint) {
@@ -30,6 +29,8 @@ func startServer(port uint) {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log_Fatalf("HTTP server error: %+v", err)
 	}
+
+	http.DefaultClient.Timeout = time.Second * 15
 }
 
 func stopServer() {
@@ -70,24 +71,9 @@ func sendSubscription(cameraIP string, expiration time.Time) error {
 	if err != nil {
 		return err
 	}
-
 	if res.StatusCode != 200 {
 		log_Errorf("[%s] Could not open subscription", cameraIP)
-		// TODO: Retry?
 		return SubscribeError
-	}
-
-	return nil
-}
-
-func renewSubscription(cameraIP string, expiration time.Time) error {
-	body := strings.NewReader(renderSubscriptionRenewXML("renew", expiration))
-	res, err := http.Post("http://" + cameraIP + "/onvif/events", "application/soap+xml", body)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != 200 {
-		return RenewError
 	}
 	return nil
 }
