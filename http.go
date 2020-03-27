@@ -43,6 +43,8 @@ var CAMERA_MOTION_TOPIC = []byte("tns1:VideoSoure/MotionAlarm")
 var CAMERA_MOTION_START = []byte(`<tt:Data><tt:SimpleItem Name="State" Value="true"/></tt:Data>`)
 var CAMERA_MOTION_END = []byte(`<tt:Data><tt:SimpleItem Name="State" Value="false"/></tt:Data>`)
 func handleEvent(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	ip := strings.Split(r.RemoteAddr, ":")[0]
 	camera := findCamera(ip)
 	if camera == nil {
@@ -71,6 +73,8 @@ func sendSubscription(cameraIP string, expiration time.Time) error {
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
+
 	if res.StatusCode != 200 {
 		log_Errorf("[%s] Could not open subscription", cameraIP)
 		return SubscribeError
@@ -84,6 +88,8 @@ func unsubscribe(cameraIP string) error {
 	if err != nil {
 		return err
 	}
+
+	defer res.Body.Close()
 	if res.StatusCode != 200 {
 		return UnsubscribeError
 	}
