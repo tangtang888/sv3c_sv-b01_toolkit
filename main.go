@@ -7,8 +7,11 @@ import (
 	"time"
 	"os"
 	"os/signal"
+	"syscall"
 	"io/ioutil"
 	"path/filepath"
+	"net"
+	"fmt"
 )
 
 type flagArray []string
@@ -26,7 +29,6 @@ var localIP string
 var port uint
 var cameraConfigs flagArray
 var callbackURL string
-var ffmpegPath string
 var outputPath string
 var debugEnabled bool
 var recordingKeepDays uint
@@ -35,13 +37,14 @@ func init() {
 	flag.BoolVar(&debugEnabled, "debug", false, "Debug logging enabled.")
 	flag.StringVar(&outputPath, "outputPath", "", "Output directory for recordings.")
 	flag.StringVar(&localIP, "localIP", "0.0.0.0", "IP of this machine, where cameras will make event callbacks.")
-	flag.StringVar(&ffmpegPath, "ffmpeg", "ffmpeg", "ffmpeg path")
 	flag.UintVar(&recordingKeepDays, "saveDays", 30, "Save recordings for this many days.")
 	flag.UintVar(&port, "port", 8080, "Port to bind to.")
 	flag.Var(&cameraConfigs, "camera", "Camera IP and port to subscribe to, with name (multiple allowed). [192.168.1.100:8000/front_door]")
 	flag.Parse()
 
 	if localIP == "0.0.0.0" {
+		fmt.Println("Interface Addresses:")
+		fmt.Println(net.InterfaceAddrs())
 		log_Fatalf("Local IP not specified.")
 	}
 	if len(cameraConfigs) == 0 {
@@ -89,23 +92,36 @@ func main() {
 }
 
 func startPurgeTask() {
-	ticker := time.NewTicker(time.Hour * 24 * time.Duration(recordingKeepDays))
+	ticker := time.NewTicker(time.Hour * 24)
 	defer ticker.Stop()
 	for _ = range ticker.C {
-		files, err := ioutil.ReadDir(outputPath)
+		purge()
+	}
+}
+
+func purge() {
+	files, err := ioutil.ReadDir(outputPath)
+	if err != nil {
+		log_Errorf("Error reading output dir: %+v", err)
+		return
+	}
+
+	cutoffTime := time.Now().Add(time.Hour * 24 * -time.Duration(recordingKeepDays))
+	for _, f := range files {
+		fullPath := filepath.Join(outputPath, f.Name())
+		info, err := os.Stat(fullPath)
 		if err != nil {
-			log_Errorf("Error reading output dir: %+v", err)
+			log_Errorf("Error reading file (%s): %+v", fullPath, err)
 			continue
 		}
 
-		cutoffTime := time.Now().Add(time.Hour * 24 * -time.Duration(recordingKeepDays))
-		for _, f := range files {
-			if f.ModTime().Before(cutoffTime) {
-				fullPath := filepath.Join(outputPath, f.Name())
-				err := os.Remove(fullPath)
-				if err != nil {
-					log_Errorf("Error deleting file (%s): %+v", fullPath, err)
-				}
+		stat_t := info.Sys().(*syscall.Stat_t)
+		created := time.Unix(int64(stat_t.Ctim.Sec), int64(stat_t.Ctim.Nsec))
+		
+		if created.Before(cutoffTime) {
+			err := os.Remove(fullPath)
+			if err != nil {
+				log_Errorf("Error deleting file (%s): %+v", fullPath, err)
 			}
 		}
 	}

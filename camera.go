@@ -128,5 +128,5 @@ func (c *Camera) PostEvent(motion bool) {
 }
 
 func recordCmd(streamURL string, filename string) *exec.Cmd {
-	return exec.Command(ffmpegPath, "-i", streamURL, "-vcodec", "copy", filename)
+	return exec.Command("ffmpeg", "-i", streamURL, "-vcodec", "copy", filename)
 }
