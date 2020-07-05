@@ -30,7 +30,10 @@ func (c *Camera) Subscribe() {
 	err := sendSubscription(c.IP, expiration)
 	if err != nil {
 		log.Printf("[%s] %+v", c.IP, err)
+		return
 	}
+
+	cameraInit(c.Topic, c.IP)
 
 	c.SubscriptionExpiration = expiration
 	c.Subscribed = true

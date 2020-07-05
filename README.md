@@ -1,12 +1,20 @@
-# onvif_mqtt
+# SV3C SV-B01 Toolkit
 
-Subscribes to motion events from an IP camera and publishes results to MQTT.
+## `motion`
+
+Subscribes to motion events from the camera and publishes results to MQTT.
+
+## `record`
+
+Subscribes to MQTT topics and records streams when motion is detected.
 
 ## Hardware
 
 [SV3C SV-B01-1080P-POE Camera](https://www.amazon.com/gp/product/B01G1U4MVA) with 2018-09-07 firmware.
 
-## Proxy
+## Notes
+
+### Proxy
 
 RTSP streams can be proxied with this minimal nginx config.
 

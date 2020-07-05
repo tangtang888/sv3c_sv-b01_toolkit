@@ -18,12 +18,12 @@ import (
 type flagArray []string
 
 func (i *flagArray) String() string {
-    return ""
+	return ""
 }
 
 func (i *flagArray) Set(value string) error {
-    *i = append(*i, strings.TrimSpace(value))
-    return nil
+	*i = append(*i, strings.TrimSpace(value))
+	return nil
 }
 
 var localIP string
@@ -37,8 +37,8 @@ var debugLogEnabled bool
 func init() {
 	flag.BoolVar(&debugLogEnabled, "debug", false, "Debug logging enabled.")
 	flag.UintVar(&port, "port", 8080, "Port to bind to.")
-	flag.StringVar(&mqttBroker, "broker", "", "MQTT broker.")
-	flag.Var(&cameraIPs, "camera", "Camera IP and port to subscribe to (multiple allowed). [192.168.1.100:8000]")
+	flag.StringVar(&mqttBroker, "broker", "127.0.0.1:1883", "MQTT broker with port. [127.0.0.1:1883]")
+	flag.Var(&cameraIPs, "camera", "Camera IP for ONVIF over HTTP (multiple allowed). [192.168.1.100]")
 	flag.Var(&cameraTopics, "topic", "Camera topic (multiple allowed). [home/garage/camera]")
 	flag.Parse()
 	
@@ -52,9 +52,6 @@ func init() {
 	}
 	if len(cameraTopics) != len(cameraIPs) {
 		log.Fatal("Mismatched number of camera IPs and topics.")
-	}
-	if mqttBroker == "" {
-		log.Fatal("Invalid MQTT broker address.")
 	}
 
 	var err error
@@ -157,8 +154,16 @@ func getExternalIP() (string, error) {
 	return "", errors.New("Cannot determine local IP.")
 }
 
+func cameraInit(topic string, ip string) {
+	t := client.Publish(topic + "/ip", 1, true, ip)
+	t.Wait()
+	if t.Error() != nil {
+		log.Println(t.Error())
+	}
+}
+
 func motionStart(topic string) {
-	t1 := client.Publish(topic + "/motion", 1, false, "1")
+	t1 := client.Publish(topic + "/motion", 1, false, "true")
 	t2 := client.Publish(topic + "/lastMotion", 1, true, fmt.Sprint(time.Now().Unix()))
 	t1.Wait()
 	t2.Wait()
@@ -172,7 +177,7 @@ func motionStart(topic string) {
 }
 
 func motionStop(topic string) {
-	t := client.Publish(topic + "/motion", 1, false, "0")
+	t := client.Publish(topic + "/motion", 1, false, "false")
 	t.Wait()
 	if t.Error() != nil {
 		log.Println(t.Error())
