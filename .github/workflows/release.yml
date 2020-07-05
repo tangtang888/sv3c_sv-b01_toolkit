@@ -15,7 +15,7 @@ jobs:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.13
+        go-version: ^1.14
       id: go
 
     - name: Check out code into the Go module directory
@@ -25,19 +25,19 @@ jobs:
       env:
         GOOS: linux
         GOARCH: arm
-      run: go build -o build/onvif_record_linux-arm -v .
+      run: go build -o build/sv3c_b01_onvif_mqtt_linux-arm -v .
     
     - name: Build (linux/amd64)
       env:
         GOOS: linux
         GOARCH: amd64
-      run: go build -o build/onvif_record_linux-amd64 -v .
+      run: go build -o build/sv3c_b01_onvif_mqtt_linux-amd64 -v .
       
     - name: Build (freebsd/amd64)
       env:
         GOOS: freebsd
         GOARCH: amd64
-      run: go build -o build/onvif_record_freebsd-amd64 -v .
+      run: go build -o build/sv3c_b01_onvif_mqtt_freebsd-amd64 -v .
   
     - name: Create release
       id: create_release
@@ -54,8 +54,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with: 
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build/onvif_record_freebsd-amd64
-        asset_name: onvif_record_freebsd-amd64
+        asset_path: build/sv3c_b01_onvif_mqtt_freebsd-amd64
+        asset_name: sv3c_b01_onvif_mqtt_freebsd-amd64
         asset_content_type: application/octet-stream
         
     - name: Upload linux/amd64
@@ -64,8 +64,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with: 
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build/onvif_record_linux-amd64
-        asset_name: onvif_record_linux-amd64
+        asset_path: build/sv3c_b01_onvif_mqtt_linux-amd64
+        asset_name: sv3c_b01_onvif_mqtt_linux-amd64
         asset_content_type: application/octet-stream
     
     - name: Upload linux/arm
@@ -74,6 +74,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with: 
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build/onvif_record_linux-arm
-        asset_name: onvif_record_linux-arm
+        asset_path: build/sv3c_b01_onvif_mqtt_linux-arm
+        asset_name: sv3c_b01_onvif_mqtt_linux-arm
         asset_content_type: application/octet-stream

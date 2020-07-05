@@ -4,11 +4,15 @@ import (
 	"flag"
 	"strconv"
 	"strings"
-	"time"
 	"os"
 	"os/signal"
 	"net"
+	"errors"
+	"log"
+	"time"
 	"fmt"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 type flagArray []string
@@ -24,29 +28,41 @@ func (i *flagArray) Set(value string) error {
 
 var localIP string
 var port uint
-var cameraConfigs flagArray
+var cameraIPs flagArray
+var cameraTopics flagArray
 var callbackURL string
-var outputPath string
-var debugEnabled bool
-var recordingKeepDays uint
+var mqttBroker string
+var debugLogEnabled bool
 
 func init() {
-	flag.BoolVar(&debugEnabled, "debug", false, "Debug logging enabled.")
-	flag.StringVar(&outputPath, "outputPath", "", "Output directory for recordings.")
-	flag.StringVar(&localIP, "localIP", "0.0.0.0", "IP of this machine, where cameras will make event callbacks.")
-	flag.UintVar(&recordingKeepDays, "saveDays", 30, "Save recordings for this many days.")
+	flag.BoolVar(&debugLogEnabled, "debug", false, "Debug logging enabled.")
 	flag.UintVar(&port, "port", 8080, "Port to bind to.")
-	flag.Var(&cameraConfigs, "camera", "Camera IP and port to subscribe to, with name (multiple allowed). [192.168.1.100:8000/front_door]")
+	flag.StringVar(&mqttBroker, "broker", "", "MQTT broker.")
+	flag.Var(&cameraIPs, "camera", "Camera IP and port to subscribe to (multiple allowed). [192.168.1.100:8000]")
+	flag.Var(&cameraTopics, "topic", "Camera topic (multiple allowed). [home/garage/camera]")
 	flag.Parse()
+	
+	if len(cameraIPs) == 0 {
+		log.Fatal("No cameras specified.")
+	}
+	for _, ip := range cameraIPs {
+		if net.ParseIP(ip) == nil {
+			log.Fatal("Invalid camera address:", ip)
+		}
+	}
+	if len(cameraTopics) != len(cameraIPs) {
+		log.Fatal("Mismatched number of camera IPs and topics.")
+	}
+	if mqttBroker == "" {
+		log.Fatal("Invalid MQTT broker address.")
+	}
 
-	if localIP == "0.0.0.0" {
-		fmt.Println("Interface Addresses:")
-		fmt.Println(net.InterfaceAddrs())
-		log_Fatalf("Local IP not specified.")
+	var err error
+	localIP, err = getExternalIP()
+	if err != nil {
+		log.Fatal(err)
 	}
-	if len(cameraConfigs) == 0 {
-		log_Fatalf("No cameras specified.")
-	}
+ 
 	callbackURL = "http://" + localIP + ":" + strconv.FormatUint(uint64(port), 10) + "/events"
 }
 
@@ -61,22 +77,32 @@ func findCamera(ip string) *Camera {
 	return nil
 }
 
+var client mqtt.Client
+
 func main() {
-	cameras = make([]*Camera, 0, len(cameraConfigs))
-	for _, conf := range cameraConfigs {
-		parts := strings.Split(conf, "/")
-		name := ""
-		if len(parts) > 1 {
-			name = parts[1]
-		}
-		cam := NewCamera(parts[0], name, time.Second * 5)
+	errLog := log.New(os.Stderr, "", 0)
+	mqtt.ERROR = errLog
+	opts := mqtt.NewClientOptions().AddBroker("tcp://" + mqttBroker).SetClientID("sv3c_b01_onvif")
+	opts.SetKeepAlive(time.Second * 5)
+	opts.SetPingTimeout(time.Second * 1)
+	opts.SetConnectTimeout(time.Second * 5)
+	opts.SetAutoReconnect(true)
+	opts.SetCleanSession(true)
+
+	client = mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		log.Fatal(token.Error())
+	}
+
+	cameras = make([]*Camera, 0, len(cameraIPs))
+	for i, ip := range cameraIPs {
+		cam := NewCamera(ip, cameraTopics[i])
 		cam.Subscribe()
 		cameras = append(cameras, cam)
 	}
 
-	go startPurgeTask()
 	go startServer(port)
-
+	
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt)
 	<- sigint
@@ -88,10 +114,67 @@ func main() {
 	stopServer()
 }
 
-func startPurgeTask() {
-	ticker := time.NewTicker(time.Hour * 24)
-	defer ticker.Stop()
-	for _ = range ticker.C {
-		purge()
+func logDebug(v ...interface{}) {
+	if debugLogEnabled {
+		log.Println(v)
+	}
+}
+
+func getExternalIP() (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue // interface down
+		}
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue // loopback interface
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return "", err
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil {
+				continue // not an ipv4 address
+			}
+			return ip.String(), nil
+		}
+	}
+	return "", errors.New("Cannot determine local IP.")
+}
+
+func motionStart(topic string) {
+	t1 := client.Publish(topic + "/motion", 1, false, "1")
+	t2 := client.Publish(topic + "/lastMotion", 1, true, fmt.Sprint(time.Now().Unix()))
+	t1.Wait()
+	t2.Wait()
+
+	if t1.Error() != nil {
+		log.Println(t1.Error())
+	}
+	if t2.Error() != nil {
+		log.Println(t2.Error())
+	}
+}
+
+func motionStop(topic string) {
+	t := client.Publish(topic + "/motion", 1, false, "0")
+	t.Wait()
+	if t.Error() != nil {
+		log.Println(t.Error())
 	}
 }
