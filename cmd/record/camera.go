@@ -60,9 +60,10 @@ func (c *Camera) StartMotion() {
 		return
 	}
 
-	output := path.Join(outputPath, c.Name + "_" + time.Now().Format(RECORDING_TIME_FORMAT) + ".mp4")
 	logDebug("Starting recording for", c.Topic)
-	c.ffmpegCmd = recordCmd("rtsp://" + c.IP + ":554/stream0", output)
+	output := path.Join(outputPath, time.Now().Format(RECORDING_TIME_FORMAT) + "_" + c.Name + ".mp4")
+	title := time.Now().Format("2006-01-02 15:04:05") + " - " + c.Name
+	c.ffmpegCmd = recordCmd("rtsp://" + c.IP + ":554/stream0", output, title)
 	c.ffmpegCmd.Dir = outputPath
 	if err := c.ffmpegCmd.Start(); err != nil {
 		log.Fatalf("[%s | %s] %+v", c.Topic, c.IP, err)
@@ -75,6 +76,6 @@ func (c *Camera) StopMotion() {
 	c.RecordingStopTimer.Reset(c.PostMotionRecordDuration)
 }
 
-func recordCmd(streamURL string, filename string) *exec.Cmd {
-	return exec.Command("ffmpeg", "-i", streamURL, "-vcodec", "copy", filename)
+func recordCmd(streamURL string, filename string, title string) *exec.Cmd {
+	return exec.Command("ffmpeg", "-i", streamURL, "-vcodec", "copy", "-metadata", "title=" + title, filename)
 }
