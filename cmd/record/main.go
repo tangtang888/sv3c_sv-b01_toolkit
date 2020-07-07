@@ -27,14 +27,17 @@ var mqttBroker string
 var debugLogEnabled bool
 var outputPath string
 var recordingKeepDays uint
+var armTopic string
+
+var recordEnabled bool = true
 
 func init() {
 	flag.BoolVar(&debugLogEnabled, "debug", false, "Debug logging enabled.")
 	flag.StringVar(&mqttBroker, "broker", "127.0.0.1:1883", "MQTT broker with port. [127.0.0.1:1883]")
 	flag.Var(&cameraTopics, "topic", "Camera topics (mulitple allowed). [home/garage/camera]")
 	flag.StringVar(&outputPath, "output", "", "Recording output path. [/srv/camera]")
-	flag.UintVar(&recordingKeepDays, "saveDays", 30, "Save recordings for this many days.")
-	
+	flag.UintVar(&recordingKeepDays, "saveDays", 30, "Save recordings for this many days (optional).")
+	flag.StringVar(&armTopic, "armTopic", "", "MQTT topic where a value of 'true' enables recording (optional). [home/alarm_armed]")
 	flag.Parse()
 
 	if len(cameraTopics) == 0 {
@@ -42,6 +45,9 @@ func init() {
 	}
 	if outputPath == "" {
 		log.Fatal("No output path specified.")
+	}
+	if len(armTopic) > 0 {
+		recordEnabled = false // wait for arm message to determine if armed
 	}
 }
 
@@ -68,13 +74,25 @@ func main() {
 		}
 	}
 
+	if len(armTopic) > 0 {
+		if token := client.Subscribe(armTopic, 2, handleArmMessage); token.Wait() && token.Error() != nil {
+			log.Fatal(token.Error())
+		}
+	}
+
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt)
 	<- sigint
 
 	for _, topic := range cameraTopics {
 		if token := client.Unsubscribe(topic + "/+"); token.Wait() && token.Error() != nil {
-			log.Fatal(token.Error())
+			log.Println(token.Error())
+		}
+	}
+
+	if len(armTopic) > 0 {
+		if token := client.Unsubscribe(armTopic); token.Wait() && token.Error() != nil {
+			log.Println(token.Error())
 		}
 	}
 }
@@ -87,11 +105,19 @@ func handleCameraMessage(client mqtt.Client, msg mqtt.Message) {
 	if strings.HasSuffix(msg.Topic(), "/ip") {
 		addCamera(primaryTopic, string(msg.Payload()))
 	} else if strings.HasSuffix(msg.Topic(), "/motion") {
-		if string(msg.Payload()) == "true" {
+		if string(msg.Payload()) == "true" && recordEnabled {
 			cameras[primaryTopic].StartMotion()
 		} else if string(msg.Payload()) == "false" {
 			cameras[primaryTopic].StopMotion()
 		}
+	}
+}
+
+func handleArmMessage(client mqtt.Client, msg mqtt.Message) {
+	if string(msg.Payload()) == "true" {
+		recordEnabled = true
+	} else {
+		recordEnabled = false
 	}
 }
 
