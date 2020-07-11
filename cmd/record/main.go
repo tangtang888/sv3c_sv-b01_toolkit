@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 	"strings"
+	"strconv"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -56,7 +57,7 @@ var client mqtt.Client
 func main() {
 	errLog := log.New(os.Stderr, "", 0)
 	mqtt.ERROR = errLog
-	opts := mqtt.NewClientOptions().AddBroker("tcp://" + mqttBroker).SetClientID("sv3c_b01_record")
+	opts := mqtt.NewClientOptions().AddBroker("tcp://" + mqttBroker).SetClientID("sv3c_b01_record_" + strconv.Itoa(os.Getpid()))
 	opts.SetKeepAlive(time.Second * 5)
 	opts.SetPingTimeout(time.Second * 1)
 	opts.SetConnectTimeout(time.Second * 5)
@@ -95,6 +96,8 @@ func main() {
 			log.Println(token.Error())
 		}
 	}
+
+	client.Disconnect(1000)
 }
 
 var cameras map[string]*Camera = make(map[string]*Camera)

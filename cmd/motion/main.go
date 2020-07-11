@@ -79,7 +79,7 @@ var client mqtt.Client
 func main() {
 	errLog := log.New(os.Stderr, "", 0)
 	mqtt.ERROR = errLog
-	opts := mqtt.NewClientOptions().AddBroker("tcp://" + mqttBroker).SetClientID("sv3c_b01_onvif")
+	opts := mqtt.NewClientOptions().AddBroker("tcp://" + mqttBroker).SetClientID("sv3c_b01_onvif_" + strconv.Itoa(os.Getpid()))
 	opts.SetKeepAlive(time.Second * 5)
 	opts.SetPingTimeout(time.Second * 1)
 	opts.SetConnectTimeout(time.Second * 5)
@@ -94,8 +94,8 @@ func main() {
 	cameras = make([]*Camera, 0, len(cameraIPs))
 	for i, ip := range cameraIPs {
 		cam := NewCamera(ip, cameraTopics[i])
-		cam.Subscribe()
 		cameras = append(cameras, cam)
+		go cam.Subscribe()
 	}
 
 	go startServer(port)
@@ -105,8 +105,10 @@ func main() {
 	<- sigint
 
 	for _, camera := range cameras {
-		camera.Stop()
+		camera.Unsubscribe()
 	}
+
+	client.Disconnect(1000)
 	
 	stopServer()
 }
@@ -159,6 +161,24 @@ func cameraInit(topic string, ip string) {
 	t.Wait()
 	if t.Error() != nil {
 		log.Println(t.Error())
+	}
+}
+
+func cameraRemove(topic string) {
+	t1 := client.Publish(topic + "/motion", 1, true, nil)
+	t2 := client.Publish(topic + "/lastMotion", 1, true, nil)
+	t3 := client.Publish(topic + "/ip", 1, true, nil)
+	t1.Wait()
+	t2.Wait()
+	t3.Wait()
+	if t1.Error() != nil {
+		log.Println(t1.Error())
+	}
+	if t2.Error() != nil {
+		log.Println(t2.Error())
+	}
+	if t3.Error() != nil {
+		log.Println(t3.Error())
 	}
 }
 

@@ -11,8 +11,6 @@ const SUBSCRIPTION_RENEWAL = SUBSCRIPTION_DURATION - (time.Second * 5)
 type Camera struct {
 	Topic string
 	IP string
-	Subscribed bool
-	SubscriptionExpiration time.Time
 	SubscriptionTimer *time.Timer
 }
 
@@ -26,17 +24,7 @@ func NewCamera(ip string, topic string) *Camera {
 func (c *Camera) Subscribe() {
 	logDebug("Subscribing to", c.IP)
 
-	expiration := time.Now().Add(SUBSCRIPTION_DURATION)
-	err := sendSubscription(c.IP, expiration)
-	if err != nil {
-		log.Printf("[%s] %+v", c.IP, err)
-		return
-	}
-
 	cameraInit(c.Topic, c.IP)
-
-	c.SubscriptionExpiration = expiration
-	c.Subscribed = true
 	c.SubscriptionTimer = time.NewTimer(SUBSCRIPTION_RENEWAL)
 	go c.handleSubscriptionRenewal()
 }
@@ -64,12 +52,7 @@ func (c *Camera) Unsubscribe() {
 	if err != nil {
 		log.Printf("[%s] %+v", c.IP, err)
 	}
-
-	c.Subscribed = false
-}
-
-func (c *Camera) Stop() {
-	c.Unsubscribe()
+	cameraRemove(c.Topic)
 }
 
 func (c *Camera) PostEvent(motion bool) {
