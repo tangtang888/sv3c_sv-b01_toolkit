@@ -81,6 +81,8 @@ func main() {
 		}
 	}
 
+	go startPurgeTask()
+
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt)
 	<- sigint
@@ -132,7 +134,7 @@ func addCamera(topic string, ip string) {
 }
 
 func startPurgeTask() {
-	ticker := time.NewTicker(time.Hour * 24)
+	ticker := time.NewTicker(time.Hour * 6)
 	defer ticker.Stop()
 	for _ = range ticker.C {
 		purge()
