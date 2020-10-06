@@ -168,9 +168,11 @@ func cameraRemove(topic string) {
 	t1 := client.Publish(topic + "/motion", 1, true, nil)
 	t2 := client.Publish(topic + "/lastMotion", 1, true, nil)
 	t3 := client.Publish(topic + "/ip", 1, true, nil)
+	t4 := client.Publish(topic + "/recording", 1, true, nil)
 	t1.Wait()
 	t2.Wait()
 	t3.Wait()
+	t4.Wait()
 	if t1.Error() != nil {
 		log.Println(t1.Error())
 	}
@@ -179,6 +181,9 @@ func cameraRemove(topic string) {
 	}
 	if t3.Error() != nil {
 		log.Println(t3.Error())
+	}
+	if t4.Error() != nil {
+		log.Println(t4.Error())
 	}
 }
 

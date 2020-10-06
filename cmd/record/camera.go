@@ -19,15 +19,17 @@ type Camera struct {
 	PostMotionRecordDuration time.Duration
 	LastMotionEvent time.Time
 	ffmpegCmd *exec.Cmd
+	onRecordStateChange func(string, bool)
 }
 
-func NewCamera(ip string, topic string, recordDuration time.Duration) *Camera {
+func NewCamera(ip string, topic string, recordDuration time.Duration, onRecordStateChange func(string, bool)) *Camera {
 	c := &Camera{
 		Topic: topic,
 		Name: strings.ReplaceAll(topic, "/", "-"),
 		IP: ip,
 		PostMotionRecordDuration: recordDuration,
 		RecordingStopTimer: time.NewTimer(time.Hour),
+		onRecordStateChange: onRecordStateChange,
 	}
 
 	go c.handleTimerExpire()
@@ -48,6 +50,7 @@ func (c *Camera) StopRecording() {
 	logDebug("Stopping recording for", c.Topic)
 	c.ffmpegCmd.Process.Signal(os.Interrupt)
 	c.ffmpegCmd = nil
+	c.onRecordStateChange(c.Topic, false)
 }
 
 func (c *Camera) StartMotion() {
@@ -67,7 +70,9 @@ func (c *Camera) StartMotion() {
 	c.ffmpegCmd.Dir = outputPath
 	if err := c.ffmpegCmd.Start(); err != nil {
 		log.Fatalf("[%s | %s] %+v", c.Topic, c.IP, err)
+		return
 	}
+	c.onRecordStateChange(c.Topic, true)
 }
 
 func (c *Camera) StopMotion() {

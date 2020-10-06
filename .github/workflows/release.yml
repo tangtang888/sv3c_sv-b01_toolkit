@@ -21,17 +21,17 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
 
-    - name: Build motion (freebsd/amd64)
+    - name: Build motion (linux/amd64)
       env:
-        GOOS: freebsd
+        GOOS: linux
         GOARCH: amd64
-      run: go build -o build/motion_freebsd-amd64 -v ./cmd/motion
+      run: go build -o build/motion_linux-amd64 -v ./cmd/motion
     
-    - name: Build record (freebsd/amd64)
+    - name: Build record (linux/amd64)
       env:
-        GOOS: freebsd
+        GOOS: linux
         GOARCH: amd64
-      run: go build -o build/record_freebsd-amd64 -v ./cmd/record
+      run: go build -o build/record_linux-amd64 -v ./cmd/record
 
     - name: Create release
       id: create_release
@@ -48,8 +48,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with: 
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build/motion_freebsd-amd64
-        asset_name: motion_freebsd-amd64
+        asset_path: build/motion_linux-amd64
+        asset_name: motion_linux-amd64
         asset_content_type: application/octet-stream
 
     - name: Upload record
@@ -58,6 +58,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with: 
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build/record_freebsd-amd64
-        asset_name: record_freebsd-amd64
+        asset_path: build/record_linux-amd64
+        asset_name: record_linux-amd64
         asset_content_type: application/octet-stream

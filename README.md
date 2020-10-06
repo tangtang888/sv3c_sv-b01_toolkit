@@ -12,6 +12,14 @@ Subscribes to MQTT topics and records streams when motion is detected.
 
 [SV3C SV-B01-1080P-POE Camera](https://www.amazon.com/gp/product/B01G1U4MVA) with 2018-09-07 firmware.
 
+## Building
+
+```
+go build ./cmd/motion -o build/motion
+go build ./cmd/record -o build/record
+```
+(ensure `GOPATH` is set when using nix)
+
 ## Notes
 
 ### Proxy
@@ -31,3 +39,4 @@ stream {
 	}
 }
 ```
+

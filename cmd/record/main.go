@@ -24,6 +24,7 @@ func (i *flagArray) Set(value string) error {
 }
 
 var cameraTopics flagArray
+var postMotionCooldown uint
 var mqttBroker string
 var debugLogEnabled bool
 var outputPath string
@@ -36,9 +37,10 @@ func init() {
 	flag.BoolVar(&debugLogEnabled, "debug", false, "Debug logging enabled.")
 	flag.StringVar(&mqttBroker, "broker", "127.0.0.1:1883", "MQTT broker with port. [127.0.0.1:1883]")
 	flag.Var(&cameraTopics, "topic", "Camera topics (mulitple allowed). [home/garage/camera]")
+	flag.UintVar(&postMotionCooldown, "motionCooldown", 5, "Time to continue recording after motion stops in seconds. [5]")
 	flag.StringVar(&outputPath, "output", "", "Recording output path. [/srv/camera]")
 	flag.UintVar(&recordingKeepDays, "saveDays", 30, "Save recordings for this many days (optional).")
-	flag.StringVar(&armTopic, "armTopic", "", "MQTT topic where a value of 'true' enables recording (optional). [home/alarm_armed]")
+	flag.StringVar(&armTopic, "armTopic", "", "MQTT topic where a value of 'true' enables recording (optional). [home/armed]")
 	flag.Parse()
 
 	if len(cameraTopics) == 0 {
@@ -129,7 +131,16 @@ func handleArmMessage(client mqtt.Client, msg mqtt.Message) {
 func addCamera(topic string, ip string) {
 	if _, ok := cameras[topic]; !ok {
 		logDebug("Found camera", topic, ip)
-		cameras[topic] = NewCamera(ip, topic, time.Second * 5)
+
+		cameras[topic] = NewCamera(ip, topic, time.Second * time.Duration(postMotionCooldown), handleCameraRecordStateChange)
+	}
+}
+
+func handleCameraRecordStateChange(topic string, recording bool) {
+	t := client.Publish(topic + "/recording", 1, true, boolToStr(recording))
+	t.Wait()
+	if t.Error() != nil {
+		log.Println(t.Error())
 	}
 }
 
@@ -144,5 +155,13 @@ func startPurgeTask() {
 func logDebug(v ...interface{}) {
 	if debugLogEnabled {
 		log.Println(v)
+	}
+}
+
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	} else {
+		return "false"
 	}
 }
