@@ -1,4 +1,4 @@
-module sv3c_b01_onvif_mqtt
+module github.com/winduptoy/sv3c_sv-b01_toolkit
 
 go 1.13
 
