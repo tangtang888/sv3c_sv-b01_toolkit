@@ -12,6 +12,13 @@ Subscribes to MQTT topics and records streams when motion is detected.
 
 [SV3C SV-B01-1080P-POE Camera](https://www.amazon.com/gp/product/B01G1U4MVA) with 2018-09-07 firmware.
 
+### Known URLs
+
+- `rtsp://[ip]:554/stream0` (main stream)
+- `rtsp://[ip]:554/stream1` (sub stream)
+- `http://[ip]/cgi-bin/snapshot.cgi?stream=0` (full-res JPG, changing stream doesn't seem to make a difference)
+
+
 ## Building
 
 ```
